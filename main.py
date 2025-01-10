@@ -1,5 +1,6 @@
 import socket
-import time
+import struct
+import threading
 
 
 def hex_to_binary(data=0xabcddcba, size_in_bytes=4):  # default values refer to the magic cookie
