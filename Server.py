@@ -93,8 +93,7 @@ def handle_tcp_client(client_socket, client_address):
         file_size = int(client_socket.recv(1024).decode().strip())
         print(f"TCP request from {client_address}: {file_size} bytes")
 
-        # Simulate sending the requested file size
-        data = b'x' * file_size  # Example data
+        data = b'x' * file_size  # send the number of Bytes as received from the client
         client_socket.sendall(data)
         print(f"Finished TCP transfer to {client_address}")
     except Exception as e:
@@ -106,45 +105,54 @@ def handle_udp_request(packet, client_address, udp_socket):
     try:
         # Decode the packet (assuming a simple protocol)
         MAGIC_COOKIE = 0xabcddcba
+        MESSAGE_TYPE = 0x4
         REQUEST_PACKET_FORMAT = '>IBQ'  # Magic cookie (4 bytes), type (1 byte), file size (8 bytes)
         magic_cookie, message_type, file_size = struct.unpack(REQUEST_PACKET_FORMAT, packet)
 
         if magic_cookie != MAGIC_COOKIE:
-            print(f"Invalid magic cookie from {client_address}")
+            print(f"Invalid request packet from {client_address}")
             return
 
         print(f"UDP request from {client_address}: {file_size} bytes")
 
         # Simulate sending data in chunks
+        # use global/class scope variable to get file size
         total_segments = file_size // 1024  # Example: 1KB segments
         for segment in range(total_segments):
-            payload = struct.pack('>IBQQ', MAGIC_COOKIE, 0x4, total_segments, segment) + b'x' * 1024
+            payload = struct.pack('>IBQQ', MAGIC_COOKIE, MESSAGE_TYPE, total_segments, segment) + b'x' * 1024
             udp_socket.sendto(payload, client_address)
         print(f"Finished UDP transfer to {client_address}")
     except Exception as e:
         print(f"Error with UDP client {client_address}: {e}")
 
-def tcp_server(tcp_port):
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('', tcp_port))
-    server_socket.listen(5)
+
+def listen_for_TCP_requests(tcp_port):
+    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_socket.bind(('', tcp_port))
+    tcp_socket.listen(5)
     print(f"TCP server listening on port {tcp_port}")
 
     while True:
-        client_socket, client_address = server_socket.accept()
+        client_socket, client_address = tcp_socket.accept()
         print(f"Accepted TCP connection from {client_address}")
         threading.Thread(target=handle_tcp_client, args=(client_socket, client_address)).start()
 
 
-def udp_server(udp_port):
-    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.bind(('', udp_port))
-    print(f"UDP server listening on port {udp_port}")
+def listen_for_UDP_requests(udp_port_for_requests):
+    udp_main_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_main_socket.bind(('', udp_port_for_requests))
+    print(f"UDP server listening on port {udp_port_for_requests}")
 
     while True:
-        packet, client_address = udp_socket.recvfrom(1024)
-        print(f"Received UDP packet from {client_address}")
-        threading.Thread(target=handle_udp_request, args=(packet, client_address, udp_socket)).start()
+        request_packet, client_address = udp_main_socket.recvfrom(1024)
+        print(f"Received UDP request from {client_address}")
+
+        # Create a new UDP socket for the client
+        udp_client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_client_socket.bind(('', 0))  # Dynamically assign port
+        udp_port = udp_client_socket.getsockname()[1]
+        print(f"Assigned new UDP port {udp_port} for client {client_address}")
+        threading.Thread(target=handle_udp_request, args=(request_packet, client_address, udp_client_socket)).start()
 
 
 # Example usage
@@ -154,49 +162,14 @@ if __name__ == "__main__":
     udp_port = 20245  # For receiving UDP speed test requests
     tcp_port = 30345  # For receiving TCP speed test requests
 
-    broadcast_offer(broadcast_port, udp_port, tcp_port)  # test broadcasting stage
+    threading.Thread(target=broadcast_offer, args=(broadcast_port, udp_port, tcp_port), daemon=True).start()
+
 
     # Start TCP and UDP servers in separate threads
-    #threading.Thread(target=tcp_server, args=(tcp_port,), daemon=True).start()
+    threading.Thread(target=listen_for_TCP_requests, args=(tcp_port,), daemon=True).start()
     #threading.Thread(target=udp_server, args=(udp_port,), daemon=True).start()
 
+    input("press enter to close the main thread..\n")
 
 
-
-"""
-import socket
-import struct
-import threading
-
-# server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # IPv4 and TCP
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4 and UDP
-
-
-#print(socket.gethostname())
-#print(socket.gethostbyname(socket.gethostname()))
-
-# leave HOSTNAME as empty string to accept connections from all addresses available and not just the same computer
-HOSTNAME = ""
-#HOSTNAME = socket.gethostbyname(socket.gethostname())  # ip address of localhost
-port = 12345
-
-server_socket.bind((HOSTNAME, port))
-#server_socket.listen() # for tcp
-
-
-#while True:
-#    client_socket, client_address = server_socket.accept()
-#    print(f"Server is connected to {client_address}")
-
-#    client_socket.send(b"a random message for the client")
-
-#    server_socket.close()
-#    break
-
-
-msg, address = server_socket.recvfrom(1024)
-print(msg.decode("utf-8"))
-print(f"msg size in bytes: {len(msg)}")
-print(address)
-"""
 

@@ -28,6 +28,4 @@ print(len(msg))
 print(f"cookie: {binary_to_hex(msg[:32])}")
 print(f"msg_type: {binary_to_hex(msg[32:40])}")
 
-
-
-
+print(f"\u001b[33mMessage here..\u001b[0m")
