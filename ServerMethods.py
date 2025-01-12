@@ -20,6 +20,14 @@ class ServerMethods:
         self.broadcast_port = broadcast_port
         self.tcp_main_socket, self.tcp_main_port, self.udp_main_socket, self.udp_main_port = self.server_startup()
         self.udp_segment_size = udp_speed_test_segment_size
+        # vars for server stats
+        self.num_of_broadcast_offers_sent = 0
+        self.num_of_tcp_speed_tests = 0
+        self.clients_tcp_tests_list = set()
+        self.num_of_udp_speed_tests = 0
+        self.clients_udp_tests_list = set()
+        self.overall_data_sent = 0
+
 
     @staticmethod
     def server_startup():
@@ -96,6 +104,7 @@ class ServerMethods:
             while True:
                 # Broadcast the packet to the determined broadcast address
                 udp_broadcast_socket.sendto(packet, (broadcast_address, self.broadcast_port))
+                self.num_of_broadcast_offers_sent += 1
                 time.sleep(interval)
         except KeyboardInterrupt:
             self.print_colored("Broadcasting stopped.", "red")
@@ -106,6 +115,7 @@ class ServerMethods:
         try:
             # Read file size from client
             file_size = int(client_socket.recv(1024).decode().strip())
+            self.overall_data_sent += file_size  # add for server stats
 
             # Chunk size for sending data
             chunk_size = 1048576  # 1 MB
@@ -144,12 +154,15 @@ class ServerMethods:
             self.print_colored(f"Error with UDP client {client_address}: {e}", "red")
         finally:
             udp_socket.close()
+
     def listen_for_TCP_requests(self):
         """A function that runs concurrent threads for each speed-test connection over TCP"""
         self.tcp_main_socket.listen()
         while True:
             try:
                 client_socket, client_address = self.tcp_main_socket.accept()  # blocking function, not busy-wait
+                self.num_of_tcp_speed_tests += 1  # add for server stats
+                self.clients_tcp_tests_list.add(client_address[0])  # add for server stats
                 threading.Thread(target=self.handle_tcp_client, args=(client_socket, client_address)).start()
             except Exception as e:
                 self.print_colored(e, "red")
@@ -167,9 +180,37 @@ class ServerMethods:
                 udp_client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 udp_client_socket.bind(('', 0))  # Dynamically assign port
 
+                self.num_of_udp_speed_tests += 1  # add for server stats
+                self.clients_udp_tests_list.add(client_address[0])  # add for server stats
+                self.overall_data_sent += file_size  # add for server stats
+
                 threading.Thread(target=self.handle_udp_request, args=(file_size, client_address, udp_client_socket)).start()
             except Exception as e:
                 self.print_colored(e, "red")
+
+    def get_server_stats(self):
+        """A function to print some stats about the server after the user manually closes it"""
+        self.print_colored("Server Statistics and information:", "background green")
+        print(f"Number of broadcast offer sent while running: {self.num_of_broadcast_offers_sent}")
+        print(f"Number of Speed Tests: {self.num_of_tcp_speed_tests+self.num_of_udp_speed_tests}")
+        print(f"Number of TCP Speed Tests: {self.num_of_tcp_speed_tests}")
+        print(f"Number of UDP Speed Tests: {self.num_of_udp_speed_tests}")
+        if len(self.clients_tcp_tests_list) != 0:
+            print(f"Unique clients that ran TCP speed tests: {self.clients_tcp_tests_list}")
+        if len(self.clients_udp_tests_list) != 0:
+            print(f"Unique clients that ran UDP speed tests: {self.clients_udp_tests_list}")
+        formatted_data_sent = self.overall_data_sent
+        unit = "Bytes"
+        if formatted_data_sent >= 1073741824:  # 1GB
+            formatted_data_sent /= 1073741824
+            unit = "GB"
+        elif formatted_data_sent >= 1048576:  # 1MB
+            formatted_data_sent /= 1048576
+            unit = "MB"
+        elif formatted_data_sent >= 1024:  # 1KB
+            formatted_data_sent /= 1024
+            unit = "KB"
+        print(f"Overall sent data: {round(formatted_data_sent, 1)} {unit}")
 
     @staticmethod
     def get_server_ip():
@@ -199,8 +240,11 @@ class ServerMethods:
                 "red": "\u001b[31m",
                 "blue": "\u001b[34m",
                 "cyan": "\u001b[36m",
-                "magenta": "\u001b[35m"
+                "magenta": "\u001b[35m",
+                "background green": "\u001b[42m"
             }
+            if color not in colors_dict.keys():
+                raise UnsupportedColor()
             if limit_index == -1:
                 print(f"{colors_dict[color]}{msg}\u001b[0m")
             else:

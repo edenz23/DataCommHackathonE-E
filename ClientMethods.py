@@ -178,6 +178,8 @@ class ClientMethods:
                 "cyan": "\u001b[36m",
                 "magenta": "\u001b[35m"
             }
+            if color not in colors_dict.keys():
+                raise UnsupportedColor()
             if limit_index == -1:
                 print(f"{colors_dict[color]}{msg}\u001b[0m")
             else:

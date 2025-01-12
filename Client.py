@@ -34,9 +34,11 @@ def client_loop(client):
 
 if __name__ == "__main__":
     clnt = ClientMethods(broadcast_port=BROADCAST_PORT)  # init the client and run startup procedure
+    try:
+        # Run the client Main in a thread, so if the main thread receives a user input to stop, it'll stop the client's loop
+        threading.Thread(target=client_loop, args=(clnt,), daemon=True).start()
 
-    # Run the client Main in a thread, so if the main thread receives a user input to stop, it'll stop the client's loop
-    threading.Thread(target=client_loop, args=(clnt,), daemon=True).start()
-
-    input()  # stop client by pressing 'Enter'
+        input()  # stop client by pressing 'Enter'
+    except KeyboardInterrupt:
+        pass  # doesn't matter if the user stops the client with 'Enter' or Ctrl C
 
