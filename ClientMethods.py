@@ -66,8 +66,10 @@ class ClientMethods:
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # set socket over UDP with IPv4
         udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)  # option to allow IP wildcard values to work in the network
         udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST,1)  # option to allow socket the receive broadcast messages
-        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT,1)  # option to allow multiple clients on the same host
-
+        try:
+            udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT,1)  # option to allow multiple clients on the same host
+        except Exception:
+            pass # Doesnt work in Windows
         # Bind to the broadcast port to listen for offers
         udp_socket.bind(('', self.broadcast_port))
         self.print_colored("Client started, listening for offer requests...", "cyan")
@@ -158,7 +160,10 @@ class ClientMethods:
                 prt = f"UDP transfer #{transfer_id} finished, total time: {round(total_time, 5)} seconds, total speed: {round(self.file_size/total_time*8, 3)} bits/second, percentage of packets received successfully: {round(segments_reached/total_segment_count*100, 2)}%”."
                 self.print_colored(prt, "blue", 23+len(str(transfer_id)))
         except Exception as e:
-            self.print_colored(f"UDP Transfer {transfer_id}: Error: {e}", "red")
+            if e.__str__() == "cannot access local variable 'total_segment_count' where it is not associated with a value":
+                self.print_colored(f"UDP Transfer {transfer_id}: No data received over the connection")
+            else:
+                self.print_colored(f"UDP Transfer {transfer_id}: Error: {e}", "red")
 
     @staticmethod
     def print_colored(msg, color, limit_index=-1):

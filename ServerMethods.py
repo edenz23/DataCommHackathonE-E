@@ -59,16 +59,25 @@ class ServerMethods:
 
             elif platform.system() == "Windows":
                 # Run ipconfig to get network details
-                result = subprocess.run(['ipconfig'], capture_output=True, text=True)
+                result = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='oem')
                 output = result.stdout
 
-                # Use regex to extract IPv4 and subnet mask
-                ipv4_match = re.search(r'IPv4 Address.*: (\d+\.\d+\.\d+\.\d+)', output)
-                subnet_match = re.search(r'Subnet Mask.*: (\d+\.\d+\.\d+\.\d+)', output)
+                try:
+                    flag = False
+                    ipv4_address = ""
+                    subnet_mask = ""
+                    for row in output.split("\n"):
+                        if "Wireless LAN adapter" in row:
+                            flag = True
+                        if flag:
+                            # Use regex to extract IPv4 and subnet mask
+                            ipv4_match = re.findall(r'IPv4 Address.*: (\d+\.\d+\.\d+\.\d+)', row)
+                            subnet_match = re.findall(r'Subnet Mask.*: (\d+\.\d+\.\d+\.\d+)', row)
 
-                if ipv4_match and subnet_match:
-                    ipv4_address = ipv4_match.group(1)
-                    subnet_mask = subnet_match.group(1)
+                            if len(ipv4_match) != 0:
+                                ipv4_address = ipv4_match[0]
+                            if len(subnet_match) != 0:
+                                subnet_mask = subnet_match[0]
 
                     # Calculate the broadcast address
                     ipv4_parts = list(map(int, ipv4_address.split('.')))
@@ -76,7 +85,7 @@ class ServerMethods:
                     broadcast_parts = [(ipv4_parts[i] | ~subnet_parts[i] & 0xFF) for i in range(4)]
                     broadcast_address = '.'.join(map(str, broadcast_parts))
                     return broadcast_address
-                else:
+                except Exception:
                     raise RuntimeError("Could not determine broadcast address from ipconfig output.")
             else:
                 raise RuntimeError("Unsupported operating system.")
